@@ -22,6 +22,7 @@
   (let [js-settings (:js project)
 	input-paths (map #(add-path (src-path project) %) inputs)
 	output-path (add-path (deploy-path project) output)
+  paths (:paths (:js project))
 	options (merge {:pretty-print devel}
 		       (:options js-settings)
 		       (if devel
@@ -29,7 +30,7 @@
 			 (:prod-options js-settings)))]
     (make-parents (file output-path))
     (println "Compiling" (apply str (interpose ", " inputs)) "...")
-    (closure/run input-paths output-path options)))
+    (closure/run input-paths output-path options paths)))
 
 (defn js
   ([project]

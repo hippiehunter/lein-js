@@ -46,7 +46,7 @@ Format:
 
 **:prod-options**
 
-Optional. Default: []
+Optional. Default: {}
 
 Vectors of options to provide to the Closure compiler. See below for details. 
 

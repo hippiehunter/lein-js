@@ -5,7 +5,8 @@
 	   [java.nio.charset Charset])
   (:use [clojure.contrib.string :only [lower-case]]
 	[clojure.contrib.io :only [file]])
-  (:require [clojure.contrib.duck-streams :as duck-streams]))
+  (:require [clojure.contrib.duck-streams :as duck-streams])
+  (:import [java.lang ProcessBuilder]))
 
 (def default-options
      {:compilation-level :simple-optimizations
@@ -42,6 +43,8 @@
       :print-on-errors 1
       :print-if-type-checking 2
       :always-print 3})
+
+(def calc-deps-path "/home/hippiehunter/Projects/congregabo/closure/bin/")
 
 (def diagnostic-groups (seq (.getFields DiagnosticGroups)))
 
@@ -84,6 +87,23 @@
       (set-diagnostic (:compilation-warnings user-options) CheckLevel/WARNING)
       (set-diagnostic (:compilation-ignored user-options) CheckLevel/OFF)))
 
+(defn build-deps
+  [inputs paths]
+  (let [base-process-args ["python" (str calc-deps-path "calcdeps.py")
+                      "-olist"]
+        process-args (vec 
+                      (concat
+                        base-process-args
+                        (for [x paths]
+                          (str "-p" x))
+                        (for [x inputs]
+                          (str "-i" x))))
+        process (.start
+                  (ProcessBuilder. process-args))
+        output-stream (.getInputStream process)]
+    (duck-streams/copy (.getErrorStream process) *out*)
+    (duck-streams/read-lines output-stream)))
+
 (defn make-compiler-options
   [options output]
   (let [user-options (merge default-options options)
@@ -100,16 +120,20 @@
   (duck-streams/spit output (.toSource compiler)))
 
 (defn run
-  [inputs output options]
+  [inputs output options paths]
   (let [options (merge default-options options)
 	compiler-options (make-compiler-options options output)
 	charset (Charset/forName (:charset options))
-	inputs (map #(JSSourceFile/fromFile % charset) inputs)
+  processed-inputs (if paths
+                    (build-deps inputs paths)
+                    inputs)
+
+  js-file-inputs (map #(JSSourceFile/fromFile % charset) processed-inputs)
 	externs (map #(JSSourceFile/fromFile % charset) (:externs options))
 	compiler (com.google.javascript.jscomp.Compiler. System/err)]
     (com.google.javascript.jscomp.Compiler/setLoggingLevel java.util.logging.Level/WARNING)
     (doto compiler
       (.compile (into-array JSSourceFile externs)
-		(into-array JSSourceFile inputs)
+		(into-array JSSourceFile js-file-inputs)
 		compiler-options))
     (write-output compiler (file output))))
